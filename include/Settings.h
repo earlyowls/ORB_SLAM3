@@ -55,7 +55,7 @@ namespace ORB_SLAM3 {
         /*
          * Constructor from file
          */
-        Settings(const std::string &configFile, const int& sensor);
+        Settings(const std::string &calibFile, const std::string &configFile, const int& sensor);
 
         /*
          * Ostream operator overloading to dump settings to the terminal
@@ -116,6 +116,7 @@ namespace ORB_SLAM3 {
         std::string atlasSaveFile() {return sSaveto_;}
 
         float thFarPoints() {return thFarPoints_;}
+        int waitTimeMs() {return waitTimeMs_;}
 
         cv::Mat M1l() {return M1l_;}
         cv::Mat M2l() {return M2l_;}
@@ -227,6 +228,7 @@ namespace ORB_SLAM3 {
          * Other stuff
          */
         float thFarPoints_;
+        int waitTimeMs_;
 
     };
 };

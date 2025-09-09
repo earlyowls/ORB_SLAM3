@@ -22,6 +22,8 @@
 #include "Converter.h"
 #include <thread>
 #include <pangolin/pangolin.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 #include <iomanip>
 #include <openssl/md5.h>
 #include <boost/serialization/base_object.hpp>
@@ -76,7 +78,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     cv::FileNode node = fsSettings["File.version"];
     if(!node.empty() && node.isString() && node.string() == "1.0"){
-        settings_ = new Settings(strSettingsFile,mSensor);
+        settings_ = new Settings(strSettingsFile, mSensor);
 
         mStrLoadAtlasFromFile = settings_->atlasLoadFile();
         mStrSaveAtlasToFile = settings_->atlasSaveFile();
@@ -229,7 +231,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     if(bUseViewer)
     //if(false) // TODO
     {
-        mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,strSettingsFile,settings_);
+        mpViewer = new Viewer(this, mpFrameDrawer, mpMapDrawer, mpTracker, strSettingsFile, settings_);
         mptViewer = new thread(&Viewer::Run, mpViewer);
         mpTracker->SetViewer(mpViewer);
         mpLoopCloser->mpViewer = mpViewer;
@@ -1317,6 +1319,11 @@ void System::SaveDebugData(const int &initIdx)
     f.close();
 }
 
+void System::SavePointCloud(const string &filename) 
+{
+
+}
+
 
 int System::GetTrackingState()
 {
@@ -1343,6 +1350,11 @@ double System::GetTimeFromIMUInit()
         return mpLocalMapper->GetCurrKFTime()-mpLocalMapper->mFirstTs;
     else
         return 0.f;
+}
+
+int System::GetWaitTimeMs()
+{
+    return waitTimeMs;
 }
 
 bool System::isLost()

@@ -179,6 +179,7 @@ public:
 
     // For debugging
     double GetTimeFromIMUInit();
+    int GetWaitTimeMs();
     bool isLost();
     bool isFinished();
 
@@ -262,6 +263,8 @@ private:
     string mStrVocabularyFilePath;
 
     Settings* settings_;
+
+    int waitTimeMs;
 };
 
 }// namespace ORB_SLAM
