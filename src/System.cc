@@ -226,6 +226,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
 
     waitTimeMs = settings_->waitTimeMs();
+    mStrSavePclPath = settings_->pointCloudSavePath();
 
     //usleep(10*1000*1000);
 
@@ -1323,9 +1324,64 @@ void System::SaveDebugData(const int &initIdx)
     f.close();
 }
 
-void System::SavePointCloud(const string &filename) 
+void System::SavePointCloud() 
 {
+    if (mStrPclSavePath.empty())
+    {
+        std::cout << "Point cloud save path is not set. Skipping point cloud saving." << std::endl;
+        return;
+    }
 
+    std::vector<Map*> vpMaps = mpAtlas->GetAllMaps();
+    for (size_t i = 0; i < vpMaps.size(); ++i)
+    {
+        Map* pMap = vpMaps[i];
+        if (!pMap) continue;
+        std::string filename = mStrPclSavePath + std::to_string(i) + ".pcd";
+        std::cout << "Saving point cloud for map " << pMap->GetId() << " to " << filename << " ..." << std::endl;
+
+        std::vector<Eigen::Vector3f> points;
+        std::vector<KeyFrame*> vpKFs = pMap->GetAllKeyFrames();
+        for (const auto& pKF : vpKFs)
+        {
+            if (!pKF || pKF->isBad()) continue;
+            for (const auto& pMP : pKF->GetMapPoints())
+            {
+                if (!pMP || pMP->isBad()) continue;
+                Eigen::Vector3f pt = pMP->GetWorldPos();
+                points.push_back(pt);
+            }
+        }
+        // Write using the simple ASCII PCD exporter
+        PointCloudWriter(filename, points);
+    }
+}
+
+void System::PointCloudWriter(const std::string& filename, const std::vector<Eigen::Vector3f>& points)
+{
+    std::ofstream f(filename);
+    if (!f.is_open()) {
+        std::cerr << "ERROR: Could not open file for writing: " << filename << std::endl;
+        return;
+    }
+    // Write PCD header
+    f << "# .PCD v0.7 - Point Cloud Data file format\n";
+    f << "VERSION 0.7\n";
+    f << "FIELDS x y z\n";
+    f << "SIZE 4 4 4\n";
+    f << "TYPE F F F\n";
+    f << "COUNT 1 1 1\n";
+    f << "WIDTH " << points.size() << "\n";
+    f << "HEIGHT 1\n";
+    f << "VIEWPOINT 0 0 0 1 0 0 0\n";
+    f << "POINTS " << points.size() << "\n";
+    f << "DATA ascii\n";
+    // Write points
+    for (const auto& pt : points) {
+        f << pt.x() << " " << pt.y() << " " << pt.z() << "\n";
+    }
+    f.close();
+    std::cout << "Saved " << points.size() << " points to " << filename << std::endl;
 }
 
 
