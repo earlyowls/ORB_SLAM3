@@ -225,6 +225,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
 
+    waitTimeMs = settings_->waitTimeMs();
+
     //usleep(10*1000*1000);
 
     //Initialize the Viewer thread and launch
@@ -442,6 +444,8 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, 
             mpLocalMapper->Release();
             mbDeactivateLocalizationMode = false;
         }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(waitTimeMs));
     }
 
     // Check reset
@@ -1350,11 +1354,6 @@ double System::GetTimeFromIMUInit()
         return mpLocalMapper->GetCurrKFTime()-mpLocalMapper->mFirstTs;
     else
         return 0.f;
-}
-
-int System::GetWaitTimeMs()
-{
-    return waitTimeMs;
 }
 
 bool System::isLost()
