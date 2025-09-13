@@ -114,6 +114,7 @@ namespace ORB_SLAM3 {
 
         std::string atlasLoadFile() {return sLoadFrom_;}
         std::string atlasSaveFile() {return sSaveto_;}
+        std::string pointCloudSavePath() {return sPclSavePath_;}
 
         float thFarPoints() {return thFarPoints_;}
         int waitTimeMs() {return waitTimeMs_;}
@@ -229,7 +230,7 @@ namespace ORB_SLAM3 {
          */
         float thFarPoints_;
         int waitTimeMs_;
-
+        std::string sPclSavePath_;
     };
 };
 

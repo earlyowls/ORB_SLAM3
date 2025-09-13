@@ -196,6 +196,8 @@ private:
 
     void SaveAtlas(int type);
     bool LoadAtlas(int type);
+    void PointCloudWriter(const std::string& filename, const std::vector<Eigen::Vector3f>& points);
+    void SavePointCloud();
 
     string CalculateCheckSum(string filename, int type);
 
@@ -258,6 +260,7 @@ private:
     //
     string mStrLoadAtlasFromFile;
     string mStrSaveAtlasToFile;
+    string mStrSavePclPath;
 
     string mStrVocabularyFilePath;
 
