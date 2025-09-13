@@ -190,9 +190,10 @@ int main(int argc, char *argv[])
     // Stop all threads
     SLAM.Shutdown();
     // Save camera trajectory
-    string resultsPath_expId = exp_folder + "/" + paddingZeros(exp_id);
-    SLAM.SaveTrajectoryEuRoC(resultsPath_expId + "_" + "CameraTrajectory.txt");
-    SLAM.SaveKeyFrameTrajectoryTUM(resultsPath_expId + "_" + "KeyFrameTrajectory.txt");
+    // string resultsPath_expId = exp_folder + "/" + paddingZeros(exp_id);
+    // SLAM.SaveTrajectoryEuRoC(resultsPath_expId + "_" + "CameraTrajectory.txt");
+    // SLAM.SaveKeyFrameTrajectoryTUM(resultsPath_expId + "_" + "KeyFrameTrajectory.txt");
+    SLAM.SavePointCloud();
     return 0;
 }
 
