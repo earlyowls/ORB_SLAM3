@@ -179,7 +179,6 @@ public:
 
     // For debugging
     double GetTimeFromIMUInit();
-    int GetWaitTimeMs();
     bool isLost();
     bool isFinished();
 

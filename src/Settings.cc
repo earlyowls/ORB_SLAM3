@@ -490,7 +490,7 @@ namespace ORB_SLAM3 {
         bool found;
 
         thFarPoints_ = readParameter<float>(fSettings,"System.thFarPoints",found,false);
-        waitTimeMs_ = readParameter<int>(fSettings,"System.waitTimeMs",found,false);
+        waitTimeMs_ = readParameter<int>(fSettings,"System.WaitTimeMs",found,false);
     }
 
     void Settings::precomputeRectificationMaps() {
@@ -643,6 +643,7 @@ namespace ORB_SLAM3 {
         output << "\t-ORB number of scales: " << settings.nLevels_ << endl;
         output << "\t-Initial FAST threshold: " << settings.initThFAST_ << endl;
         output << "\t-Min FAST threshold: " << settings.minThFAST_ << endl;
+        output << "\t-Wait time (ms): " << settings.waitTimeMs_ << endl;
 
         return output;
     }
