@@ -102,7 +102,8 @@ public:
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     // Initialize the SLAM system. It launches the Local Mapping, Loop Closing and Viewer threads.
-    System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, const bool bUseViewer = true, const int initFr = 0, const string &strSequence = std::string());
+    System(const string &strVocFile, const string &strCalibrationFile, const string &strSettingsFile,
+        const eSensor sensor, const bool bUseViewer = true, const int initFr = 0, const string &strSequence = std::string());
 
     // Proccess the given stereo frame. Images must be synchronized and rectified.
     // Input images: RGB (CV_8UC3) or grayscale (CV_8U). RGB is converted to grayscale.
@@ -170,7 +171,7 @@ public:
     // TODO: Save/Load functions
     // SaveMap(const string &filename);
     // LoadMap(const string &filename);
-
+    
     // Information from most recent processed frame
     // You can call this right after TrackMonocular (or stereo or RGBD)
     int GetTrackingState();
@@ -181,35 +182,41 @@ public:
     double GetTimeFromIMUInit();
     bool isLost();
     bool isFinished();
-
+    
     void ChangeDataset();
-
+    
     float GetImageScale();
+    float GetFPS();
 
 #ifdef REGISTER_TIMES
     void InsertRectTime(double& time);
     void InsertResizeTime(double& time);
     void InsertTrackTime(double& time);
-#endif
-
-private:
-
+    #endif
+    
+    private:
+    
     void SaveAtlas(int type);
     bool LoadAtlas(int type);
-    void PointCloudWriter(const std::string& filename, const std::vector<Eigen::Vector3f>& points);
     void SavePointCloud();
+    void PointCloudWriter(const std::string& filename, const std::vector<Eigen::Vector3f>& points);
+    void PlanarRegression(std::vector<Eigen::Vector3f>& points);
+
 
     string CalculateCheckSum(string filename, int type);
-
+    
     // Input sensor
     eSensor mSensor;
 
+    // FPS
+    float fps;
+    
     // ORB vocabulary used for place recognition and feature matching.
     ORBVocabulary* mpVocabulary;
-
+    
     // KeyFrame database for place recognition (relocalization and loop detection).
     KeyFrameDatabase* mpKeyFrameDatabase;
-
+    
     // Map structure that stores the pointers to all KeyFrames and MapPoints.
     //Map* mpMap;
     Atlas* mpAtlas;
@@ -260,13 +267,13 @@ private:
     //
     string mStrLoadAtlasFromFile;
     string mStrSaveAtlasToFile;
-    string mStrSavePclPath;
 
     string mStrVocabularyFilePath;
 
     Settings* settings_;
 
-    int waitTimeMs;
+    string mStrSavePclPath;
+    bool mBFlatMap;
 };
 
 }// namespace ORB_SLAM

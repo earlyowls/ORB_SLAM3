@@ -25,7 +25,8 @@
 namespace ORB_SLAM3
 {
 
-Viewer::Viewer(System* pSystem, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Tracking *pTracking, const string &strSettingPath, Settings* settings):
+Viewer::Viewer(System* pSystem, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Tracking *pTracking, 
+    const string &strCalibPath, const string &strSettingPath, Settings* settings):
     both(false), mpSystem(pSystem), mpFrameDrawer(pFrameDrawer),mpMapDrawer(pMapDrawer), mpTracker(pTracking),
     mbFinishRequested(false), mbFinished(true), mbStopped(true), mbStopRequested(false)
 {
@@ -34,9 +35,10 @@ Viewer::Viewer(System* pSystem, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer
     }
     else{
 
+        cv::FileStorage fCalib(strCalibPath, cv::FileStorage::READ);
         cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
 
-        bool is_correct = ParseViewerParamFile(fSettings);
+        bool is_correct = ParseViewerParamFile(fCalib, fSettings);
 
         if(!is_correct)
         {
@@ -74,35 +76,35 @@ void Viewer::newParameterLoader(Settings *settings) {
     mViewpointF = settings->viewPointF();
 }
 
-bool Viewer::ParseViewerParamFile(cv::FileStorage &fSettings)
+bool Viewer::ParseViewerParamFile(cv::FileStorage &fCalib, cv::FileStorage &fSettings)
 {
     bool b_miss_params = false;
     mImageViewerScale = 1.f;
 
-    float fps = fSettings["Camera.fps"];
+    float fps = fCalib["Camera.fps"];
     if(fps<1)
         fps=30;
     mT = 1e3/fps;
 
-    cv::FileNode node = fSettings["Camera.width"];
+    cv::FileNode node = fCalib["Camera.w"];
     if(!node.empty())
     {
         mImageWidth = node.real();
     }
     else
     {
-        std::cerr << "*Camera.width parameter doesn't exist or is not a real number*" << std::endl;
+        std::cerr << "*Camera.w parameter doesn't exist or is not a real number*" << std::endl;
         b_miss_params = true;
     }
 
-    node = fSettings["Camera.height"];
+    node = fCalib["Camera.h"];
     if(!node.empty())
     {
         mImageHeight = node.real();
     }
     else
     {
-        std::cerr << "*Camera.height parameter doesn't exist or is not a real number*" << std::endl;
+        std::cerr << "*Camera.h parameter doesn't exist or is not a real number*" << std::endl;
         b_miss_params = true;
     }
 

@@ -105,6 +105,35 @@ namespace ORB_SLAM3 {
     }
 
     template<>
+    bool Settings::readParameter<bool>(cv::FileStorage& fSettings, const std::string& name, bool& found, const bool required){
+        cv::FileNode node = fSettings[name];
+        if(node.empty()){
+            if(required){
+                std::cerr << name << " required parameter does not exist, aborting..." << std::endl;
+                exit(-1);
+            }
+            else{
+                std::cerr << name << " optional parameter does not exist..." << std::endl;
+                found = false;
+                return false;
+            }
+        }
+        else if(!node.isInt()){
+            std::cerr << name << " parameter must be a boolean (0/1), aborting..." << std::endl;
+            exit(-1);
+        }
+        else{
+            found = true;
+            int val = node.operator int();
+            if(val != 0 && val != 1){
+                std::cerr << name << " parameter must be a boolean (0/1), aborting..." << std::endl;
+                exit(-1);
+            }
+            return val == 1;
+        }
+    }
+
+    template<>
     cv::Mat Settings::readParameter<cv::Mat>(cv::FileStorage& fSettings, const std::string& name, bool& found, const bool required){
         cv::FileNode node = fSettings[name];
         if(node.empty()){
@@ -484,14 +513,14 @@ namespace ORB_SLAM3 {
 
         sLoadFrom_ = readParameter<string>(fSettings,"System.LoadAtlasFromFile",found,false);
         sSaveto_ = readParameter<string>(fSettings,"System.SaveAtlasToFile",found,false);
-        sPclSavePath_ = readParameter<string>(fSettings,"System.SavePointCloudPath",found,false);
+        sSavePclPath_ = readParameter<string>(fSettings,"System.SavePointCloudPath",found,false);
     }
 
     void Settings::readOtherParameters(cv::FileStorage& fSettings) {
         bool found;
 
         thFarPoints_ = readParameter<float>(fSettings,"System.thFarPoints",found,false);
-        waitTimeMs_ = readParameter<int>(fSettings,"System.WaitTimeMs",found,false);
+        mBFlatMap = readParameter<bool>(fSettings,"System.FlatMapSave",found,false);
     }
 
     void Settings::precomputeRectificationMaps() {
@@ -644,7 +673,8 @@ namespace ORB_SLAM3 {
         output << "\t-ORB number of scales: " << settings.nLevels_ << endl;
         output << "\t-Initial FAST threshold: " << settings.initThFAST_ << endl;
         output << "\t-Min FAST threshold: " << settings.minThFAST_ << endl;
-        output << "\t-Wait time (ms): " << settings.waitTimeMs_ << endl;
+        output << "\t-Point cloud save path: " << settings.sSavePclPath_ << endl;
+        output << "\t-Flat map: " << settings.mBFlatMap << endl;
 
         return output;
     }
