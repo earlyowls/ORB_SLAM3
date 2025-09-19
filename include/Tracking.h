@@ -59,7 +59,9 @@ class Tracking
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     Tracking(System* pSys, ORBVocabulary* pVoc, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Atlas* pAtlas,
-             KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor, Settings* settings, const string &_nameSeq=std::string());
+             KeyFrameDatabase* pKFDB, 
+             const string &strCalibPath, const string &strSettingPath, 
+             const int sensor, Settings* settings, const string &_nameSeq=std::string());
 
     ~Tracking();
 

@@ -22,8 +22,6 @@
 #include "Converter.h"
 #include <thread>
 #include <pangolin/pangolin.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
 #include <iomanip>
 #include <openssl/md5.h>
 #include <boost/serialization/base_object.hpp>
@@ -40,8 +38,8 @@ namespace ORB_SLAM3
 
 Verbose::eLevel Verbose::th = Verbose::VERBOSITY_NORMAL;
 
-System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor,
-               const bool bUseViewer, const int initFr, const string &strSequence):
+System::System(const string &strVocFile, const string &strCalibrationFile, const string &strSettingsFile,
+    const eSensor sensor, const bool bUseViewer, const int initFr, const string &strSequence):
     mSensor(sensor), mpViewer(static_cast<Viewer*>(NULL)), mbReset(false), mbResetActiveMap(false),
     mbActivateLocalizationMode(false), mbDeactivateLocalizationMode(false), mbShutDown(false)
 {
@@ -69,6 +67,14 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         cout << "RGB-D-Inertial" << endl;
 
     //Check settings file
+
+    cv::FileStorage fsCalibration(strCalibrationFile.c_str(), cv::FileStorage::READ);
+    if(!fsCalibration.isOpened())
+    {
+       cerr << "Failed to open calibration file at: " << strCalibrationFile << endl;
+       exit(-1);
+    }
+
     cv::FileStorage fsSettings(strSettingsFile.c_str(), cv::FileStorage::READ);
     if(!fsSettings.isOpened())
     {
@@ -78,7 +84,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     cv::FileNode node = fsSettings["File.version"];
     if(!node.empty() && node.isString() && node.string() == "1.0"){
-        settings_ = new Settings(strSettingsFile, mSensor);
+        settings_ = new Settings(strCalibrationFile, strSettingsFile, mSensor);
 
         mStrLoadAtlasFromFile = settings_->atlasLoadFile();
         mStrSaveAtlasToFile = settings_->atlasSaveFile();
@@ -191,7 +197,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     //(it will live in the main thread of execution, the one that called this constructor)
     cout << "Seq. Name: " << strSequence << endl;
     mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
-                             mpAtlas, mpKeyFrameDatabase, strSettingsFile, mSensor, settings_, strSequence);
+                             mpAtlas, mpKeyFrameDatabase, strCalibrationFile, strSettingsFile, mSensor, settings_, strSequence);
 
     //Initialize the Local Mapping thread and launch
     mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor==MONOCULAR || mSensor==IMU_MONOCULAR,
@@ -225,8 +231,9 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
 
-    waitTimeMs = settings_->waitTimeMs();
     mStrSavePclPath = settings_->pointCloudSavePath();
+    mBFlatMap = settings_->isFlatMap();
+    fps = settings_->fps();
 
     //usleep(10*1000*1000);
 
@@ -234,7 +241,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     if(bUseViewer)
     //if(false) // TODO
     {
-        mpViewer = new Viewer(this, mpFrameDrawer, mpMapDrawer, mpTracker, strSettingsFile, settings_);
+        mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,strCalibrationFile, strSettingsFile,settings_);
         mptViewer = new thread(&Viewer::Run, mpViewer);
         mpTracker->SetViewer(mpViewer);
         mpLoopCloser->mpViewer = mpViewer;
@@ -445,8 +452,6 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, 
             mpLocalMapper->Release();
             mbDeactivateLocalizationMode = false;
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(waitTimeMs));
     }
 
     // Check reset
@@ -556,6 +561,12 @@ void System::Shutdown()
     {
         Verbose::PrintMess("Atlas saving to file " + mStrSaveAtlasToFile, Verbose::VERBOSITY_NORMAL);
         SaveAtlas(FileType::BINARY_FILE);
+    }
+
+    if(!mStrSavePclPath.empty())
+    {
+        Verbose::PrintMess("Saving point cloud to " + mStrSavePclPath, Verbose::VERBOSITY_NORMAL);
+        SavePointCloud();
     }
 
     /*if(mpViewer)
@@ -1324,39 +1335,6 @@ void System::SaveDebugData(const int &initIdx)
     f.close();
 }
 
-void System::SavePointCloud() 
-{
-    if (mStrPclSavePath.empty())
-    {
-        std::cout << "Point cloud save path is not set. Skipping point cloud saving." << std::endl;
-        return;
-    }
-
-    std::vector<Map*> vpMaps = mpAtlas->GetAllMaps();
-    for (size_t i = 0; i < vpMaps.size(); ++i)
-    {
-        Map* pMap = vpMaps[i];
-        if (!pMap) continue;
-        std::string filename = mStrPclSavePath + std::to_string(i) + ".pcd";
-        std::cout << "Saving point cloud for map " << pMap->GetId() << " to " << filename << " ..." << std::endl;
-
-        std::vector<Eigen::Vector3f> points;
-        std::vector<KeyFrame*> vpKFs = pMap->GetAllKeyFrames();
-        for (const auto& pKF : vpKFs)
-        {
-            if (!pKF || pKF->isBad()) continue;
-            for (const auto& pMP : pKF->GetMapPoints())
-            {
-                if (!pMP || pMP->isBad()) continue;
-                Eigen::Vector3f pt = pMP->GetWorldPos();
-                points.push_back(pt);
-            }
-        }
-        // Write using the simple ASCII PCD exporter
-        PointCloudWriter(filename, points);
-    }
-}
-
 void System::PointCloudWriter(const std::string& filename, const std::vector<Eigen::Vector3f>& points)
 {
     std::ofstream f(filename);
@@ -1382,6 +1360,74 @@ void System::PointCloudWriter(const std::string& filename, const std::vector<Eig
     }
     f.close();
     std::cout << "Saved " << points.size() << " points to " << filename << std::endl;
+}
+
+void System::SavePointCloud()
+{
+    // if (!mStrSavePclPath.empty() && !fs::exists(mStrSavePclPath)) {
+    //     if (!fs::create_directories(mStrSavePclPath)) {
+    //         std::cerr << "ERROR: Could not create directory for point clouds: " << mStrSavePclPath << std::endl;
+    //         return;
+    //     }
+    // }
+    
+    std::vector<Map*> vpMaps = mpAtlas->GetAllMaps();
+    for (size_t i = 0; i < vpMaps.size(); ++i)
+    {
+        Map* pMap = vpMaps[i];
+        if (!pMap) continue;
+        std::string filename = mStrSavePclPath + "/" + std::to_string(i) + ".pcd";
+        std::cout << "Saving point cloud for map " << pMap->GetId() << " to " << filename << " ..." << std::endl;
+
+        std::vector<Eigen::Vector3f> points;
+        std::vector<KeyFrame*> vpKFs = pMap->GetAllKeyFrames();
+        for (const auto& pKF : vpKFs)
+        {
+            if (!pKF || pKF->isBad()) continue;
+            for (const auto& pMP : pKF->GetMapPoints())
+            {
+                if (!pMP || pMP->isBad()) continue;
+                Eigen::Vector3f pt = pMP->GetWorldPos();
+                // Eigen::Vector3f color = pMP->GetColor();
+
+                points.push_back(pt);
+            }
+
+            if (mBFlatMap) {
+                PlanarRegression(points);
+            }
+        }
+        // Write using the simple ASCII PCD exporter
+        PointCloudWriter(filename, points);
+    }
+}
+
+void System::PlanarRegression(std::vector<Eigen::Vector3f>& points)
+{
+    if (points.size() < 3) return;
+
+    Eigen::Vector3f centroid(0, 0, 0);
+    
+    for (const auto& pt : points) {
+        centroid += pt;
+    }
+    centroid /= points.size();
+
+    Eigen::Matrix3f cov = Eigen::Matrix3f::Zero();
+    for (const auto& pt : points) {
+        Eigen::Vector3f centered = pt - centroid;
+        cov += centered * centered.transpose();
+    }
+    cov /= points.size();
+
+    Eigen::JacobiSVD<Eigen::Matrix3f> svd(cov, Eigen::ComputeFullU);
+    Eigen::Vector3f normal = svd.matrixU().col(2); 
+
+    for (auto& pt : points) {
+        Eigen::Vector3f centered = pt - centroid;
+        float distance = centered.dot(normal);
+        pt -= distance * normal; 
+    }
 }
 
 
@@ -1410,6 +1456,11 @@ double System::GetTimeFromIMUInit()
         return mpLocalMapper->GetCurrKFTime()-mpLocalMapper->mFirstTs;
     else
         return 0.f;
+}
+
+float System::GetFPS()
+{
+    return fps;
 }
 
 bool System::isLost()
@@ -1476,6 +1527,9 @@ void System::SaveAtlas(int type){
         mpAtlas->PreSave();
 
         string pathSaveFileName = "./";
+        // if path starts with ./ or / or C:/D:/ then use it directly
+        if(mStrSaveAtlasToFile.find("./") == 0 || mStrSaveAtlasToFile.find("/") == 0 || (mStrSaveAtlasToFile.find(":") == 1 && mStrSaveAtlasToFile.find("/") == 2))
+            pathSaveFileName = "";
         pathSaveFileName = pathSaveFileName.append(mStrSaveAtlasToFile);
         pathSaveFileName = pathSaveFileName.append(".osa");
 
@@ -1497,7 +1551,7 @@ void System::SaveAtlas(int type){
         }
         else if(type == BINARY_FILE) // File binary
         {
-            cout << "Starting to write the save binary file" << endl;
+            cout << "Starting to write the save binary file: " << pathSaveFileName << endl;
             std::remove(pathSaveFileName.c_str());
             std::ofstream ofs(pathSaveFileName, std::ios::binary);
             boost::archive::binary_oarchive oa(ofs);
@@ -1515,6 +1569,9 @@ bool System::LoadAtlas(int type)
     bool isRead = false;
 
     string pathLoadFileName = "./";
+    if(mStrLoadAtlasFromFile.find("./") == 0 || mStrLoadAtlasFromFile.find("/") == 0 || (mStrLoadAtlasFromFile.find(":") == 1 && mStrLoadAtlasFromFile.find("/") == 2))
+        pathLoadFileName = "";
+
     pathLoadFileName = pathLoadFileName.append(mStrLoadAtlasFromFile);
     pathLoadFileName = pathLoadFileName.append(".osa");
 

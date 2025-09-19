@@ -41,7 +41,8 @@ class Viewer
 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    Viewer(System* pSystem, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Tracking *pTracking, const string &strSettingPath, Settings* settings);
+    Viewer(System* pSystem, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Tracking *pTracking, 
+        const string &strCalibPath, const string &strSettingPath, Settings* settings);
 
     void newParameterLoader(Settings* settings);
 
@@ -66,7 +67,7 @@ public:
     bool both;
 private:
 
-    bool ParseViewerParamFile(cv::FileStorage &fSettings);
+    bool ParseViewerParamFile(cv::FileStorage &fCalib, cv::FileStorage &fSettings);
 
     bool Stop();
 
