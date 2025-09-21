@@ -1451,7 +1451,33 @@ bool Tracking::GetStepByStep()
     return bStepByStep;
 }
 
+void Tracking::UpdateTrackedPointsColor()
+{
+    // Use the current left gray image kept by Tracking
+    // const cv::Mat& grayLeft = mImGray;     // left or mono/RGBD gray
+    const cv::Mat& colorLeft = mImColor;
+    if(colorLeft.empty()) return;
 
+    // For stereo, we only color from the left image to keep it simple
+    const int Nleft = (mCurrentFrame.Nleft == -1) ? mCurrentFrame.N : mCurrentFrame.Nleft;
+    const bool hasOutlierMask = (int)mCurrentFrame.mvbOutlier.size() == mCurrentFrame.N;
+
+    for(int i = 0; i < Nleft; ++i)
+    {
+        MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];
+        if(!pMP) continue;
+        if(hasOutlierMask && mCurrentFrame.mvbOutlier[i]) continue;
+
+        const cv::KeyPoint& kp = mCurrentFrame.mvKeysUn[i];
+        int x = cvRound(kp.pt.x);
+        int y = cvRound(kp.pt.y);
+        if(x >= 0 && x < colorLeft.cols && y >= 0 && y < colorLeft.rows)
+        {
+            const cv::Vec3b& c = colorLeft.at<cv::Vec3b>(y, x);
+            pMP->SetColor(c); // store as BGR color
+        }
+    }
+}
 
 Sophus::SE3f Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRectRight, const double &timestamp, string filename)
 {
@@ -1568,6 +1594,7 @@ Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, co
 Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp, string filename)
 {
     mImGray = im;
+    mImColor = im;
     if(mImGray.channels()==3)
     {
         if(mbRGB)
@@ -2198,6 +2225,9 @@ void Tracking::Track()
         double timeLMTrack = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndLMTrack - time_StartLMTrack).count();
         vdLMTrack_ms.push_back(timeLMTrack);
 #endif
+
+        if(bOK)
+            UpdateTrackedPointsColor();
 
         // Update drawer
         mpFrameDrawer->Update(this);

@@ -141,6 +141,7 @@ public:
     Frame mLastFrame;
 
     cv::Mat mImGray;
+    cv::Mat mImColor;
 
     // Initialization Variables (Monocular)
     std::vector<int> mvIniLastMatches;
@@ -224,6 +225,8 @@ protected:
 
     bool NeedNewKeyFrame();
     void CreateNewKeyFrame();
+    
+    void UpdateTrackedPointsColor();
 
     // Perform preintegration from last frame
     void PreintegrateIMU();
