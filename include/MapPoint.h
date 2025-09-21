@@ -114,6 +114,9 @@ public:
     void SetWorldPos(const Eigen::Vector3f &Pos);
     Eigen::Vector3f GetWorldPos();
 
+    void SetColor(const cv::Vec3b &color);
+    cv::Vec3b GetColor() const;
+
     Eigen::Vector3f GetNormal();
     void SetNormalVector(const Eigen::Vector3f& normal);
 
@@ -196,7 +199,6 @@ public:
     Eigen::Vector3f mPosMerge;
     Eigen::Vector3f mNormalVectorMerge;
 
-
     // Fopr inverse depth optimization
     double mInvDepth;
     double mInitU;
@@ -212,6 +214,9 @@ protected:
      // Position in absolute coordinates
      Eigen::Vector3f mWorldPos;
 
+     // Color information
+     cv::Vec3b mColor = cv::Vec3b(0,0,0);
+     mutable std::mutex mMutexColor;
      // Keyframes observing the point and associated index in keyframe
      std::map<KeyFrame*,std::tuple<int,int> > mObservations;
      // For save relation without pointer, this is necessary for save/load function
