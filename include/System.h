@@ -199,7 +199,7 @@ public:
     void SaveAtlas(int type);
     bool LoadAtlas(int type);
     void SavePointCloud();
-    void PointCloudWriter(const std::string& filename, const std::vector<Eigen::Vector3f>& points);
+    void PointCloudWriter(const std::string& filename, const std::vector<Eigen::Vector3f>& points, const std::vector<cv::Vec3b>& colors);
     void PlanarRegression(std::vector<Eigen::Vector3f>& points);
 
 

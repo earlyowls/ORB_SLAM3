@@ -32,6 +32,7 @@
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/xml_iarchive.hpp>
 #include <boost/archive/xml_oarchive.hpp>
+#include <filesystem>
 
 namespace ORB_SLAM3
 {
@@ -1335,51 +1336,75 @@ void System::SaveDebugData(const int &initIdx)
     f.close();
 }
 
-void System::PointCloudWriter(const std::string& filename, const std::vector<Eigen::Vector3f>& points)
+void System::PointCloudWriter(const std::string& filename,
+                              const std::vector<Eigen::Vector3f>& points,
+                              const std::vector<cv::Vec3b>& colors)
 {
     std::ofstream f(filename);
     if (!f.is_open()) {
         std::cerr << "ERROR: Could not open file for writing: " << filename << std::endl;
         return;
     }
-    // Write PCD header
+
+    if (points.size() != colors.size()) {
+        std::cerr << "ERROR: Points and colors size mismatch. points=" << points.size()
+                  << " colors=" << colors.size() << std::endl;
+        return;
+    }
+
+    // Write PCD header with packed RGB float
     f << "# .PCD v0.7 - Point Cloud Data file format\n";
     f << "VERSION 0.7\n";
-    f << "FIELDS x y z\n";
-    f << "SIZE 4 4 4\n";
-    f << "TYPE F F F\n";
-    f << "COUNT 1 1 1\n";
+    f << "FIELDS x y z rgb\n";
+    f << "SIZE 4 4 4 4\n";
+    f << "TYPE F F F F\n";
+    f << "COUNT 1 1 1 1\n";
     f << "WIDTH " << points.size() << "\n";
     f << "HEIGHT 1\n";
     f << "VIEWPOINT 0 0 0 1 0 0 0\n";
     f << "POINTS " << points.size() << "\n";
     f << "DATA ascii\n";
-    // Write points
-    for (const auto& pt : points) {
-        f << pt.x() << " " << pt.y() << " " << pt.z() << "\n";
+
+    auto packRGBToFloat = [](const cv::Vec3b& bgr) -> float {
+        // OpenCV stores BGR; pack as RGB
+        const uint32_t r = static_cast<uint32_t>(bgr[2]);
+        const uint32_t g = static_cast<uint32_t>(bgr[1]);
+        const uint32_t b = static_cast<uint32_t>(bgr[0]);
+        const uint32_t rgb = (r << 16) | (g << 8) | b; // 0xRRGGBB
+        float out;
+        static_assert(sizeof(out) == sizeof(rgb), "float and uint32 must be 4 bytes");
+        std::memcpy(&out, &rgb, sizeof(out));
+        return out;
+    };
+
+    f.setf(std::ios::scientific);
+    f.precision(6); // similar to your sample
+
+    for (size_t i = 0; i < points.size(); ++i) {
+        const auto& pt = points[i];
+        const float rgb = packRGBToFloat(colors[i]);
+        f << pt.x() << " " << pt.y() << " " << pt.z() << " " << rgb << "\n";
     }
     f.close();
-    std::cout << "Saved " << points.size() << " points to " << filename << std::endl;
+    std::cout << "Saved " << points.size() << " colored points to " << filename << std::endl;
 }
 
 void System::SavePointCloud()
 {
-    // if (!mStrSavePclPath.empty() && !fs::exists(mStrSavePclPath)) {
-    //     if (!fs::create_directories(mStrSavePclPath)) {
-    //         std::cerr << "ERROR: Could not create directory for point clouds: " << mStrSavePclPath << std::endl;
-    //         return;
-    //     }
-    // }
+    if (mStrSavePclPath.empty()) {
+        std::cerr << "ERROR: Save path for point clouds is empty." << std::endl;
+        return;
+    }
     
     std::vector<Map*> vpMaps = mpAtlas->GetAllMaps();
     for (size_t i = 0; i < vpMaps.size(); ++i)
     {
         Map* pMap = vpMaps[i];
         if (!pMap) continue;
-        std::string filename = mStrSavePclPath + "/" + std::to_string(i) + ".pcd";
-        std::cout << "Saving point cloud for map " << pMap->GetId() << " to " << filename << " ..." << std::endl;
 
         std::vector<Eigen::Vector3f> points;
+        std::vector<cv::Vec3b> colors;
+
         std::vector<KeyFrame*> vpKFs = pMap->GetAllKeyFrames();
         for (const auto& pKF : vpKFs)
         {
@@ -1387,18 +1412,37 @@ void System::SavePointCloud()
             for (const auto& pMP : pKF->GetMapPoints())
             {
                 if (!pMP || pMP->isBad()) continue;
-                Eigen::Vector3f pt = pMP->GetWorldPos();
-                // Eigen::Vector3f color = pMP->GetColor();
-
-                points.push_back(pt);
+                points.push_back(pMP->GetWorldPos());
+                colors.push_back(pMP->GetColor());
             }
+        }
 
-            if (mBFlatMap) {
-                PlanarRegression(points);
+        // Create directories if they do not exist
+        namespace fs = std::filesystem;
+        std::string path_3d = mStrSavePclPath + "/3d";
+        if (!fs::exists(path_3d)) {
+            if (!fs::create_directories(path_3d)) {
+                std::cerr << "ERROR: Could not create directory for 3D point clouds: " << path_3d << std::endl;
+                return;
             }
         }
         // Write using the simple ASCII PCD exporter
-        PointCloudWriter(filename, points);
+        std::cout << "Saving point cloud for map " << i << " with " << points.size() << " points." << std::endl;
+        PointCloudWriter(path_3d + "/" + std::to_string(i) + ".pcd", points, colors);
+
+
+        std::string path_2d = mStrSavePclPath + "/2d";
+        if (mBFlatMap) {
+            PlanarRegression(points);
+            if (!fs::exists(path_2d)) {
+                if (!fs::create_directories(path_2d)) {
+                    std::cerr << "ERROR: Could not create directory for 2D point clouds: " << path_2d << std::endl;
+                    return;
+                }
+            }
+            std::cout << "Saving flattened point cloud for map " << i << " with " << points.size() << " points." << std::endl;
+            PointCloudWriter(path_2d + "/" + std::to_string(i) + ".pcd", points, colors);
+        }
     }
 }
 
@@ -1428,6 +1472,38 @@ void System::PlanarRegression(std::vector<Eigen::Vector3f>& points)
         float distance = centered.dot(normal);
         pt -= distance * normal; 
     }
+
+    const Eigen::Vector3f z_axis(0.0f, 0.0f, 1.0f);
+    Eigen::Vector3f axis = normal.cross(z_axis);
+    float sinTheta = axis.norm();
+    float cosTheta = normal.dot(z_axis);
+
+    Eigen::Matrix3f R = Eigen::Matrix3f::Identity();
+
+    if (sinTheta > 1e-6f) {
+        axis.normalize();
+        // Rodrigues' formula
+        Eigen::Matrix3f K;
+        K <<       0.0f, -axis.z(),  axis.y(),
+              axis.z(),       0.0f, -axis.x(),
+             -axis.y(),  axis.x(),       0.0f;
+        R = Eigen::Matrix3f::Identity() + K * sinTheta + (K * K) * (1.0f - cosTheta);
+    } else {
+        if (cosTheta < 0.0f) {
+            Eigen::Vector3f ortho = (std::fabs(normal.x()) > 0.1f) ? Eigen::Vector3f(0,1,0) : Eigen::Vector3f(1,0,0);
+            Eigen::Vector3f rotAxis = normal.cross(ortho).normalized();
+            R = Eigen::AngleAxisf(static_cast<float>(M_PI), rotAxis).toRotationMatrix();
+        }
+    }
+
+    for (auto& pt : points) {
+        pt = R * (pt - centroid) + centroid;
+    }
+
+    float meanZ = 0.0f;
+    for (const auto& pt : points) meanZ += pt.z();
+    meanZ /= static_cast<float>(points.size());
+    for (auto& pt : points) pt.z() -= meanZ;
 }
 
 
